@@ -8,7 +8,7 @@ import (
     "strings"
     "syscall"
     "time"
-
+    "path/filepath"
     "powerpoint-voice-controller/powerpoint"
     "powerpoint-voice-controller/speech"
 )
@@ -35,13 +35,11 @@ var DefaultConfig = Config{
     PowerPointFilePath: `C:\Users\Al-Khalsi\Desktop\pro.pptx`, // Default static path
     Commands: map[string]CommandType{
         // English commands
-        "open project":    OpenProject,
-        "close project":   CloseProject,
-        "next slide":      NextSlide,
-        "previous slide":  PreviousSlide,
-        "next":            NextSlide,
-        "previous":        PreviousSlide,
-        "stop":            Stop,
+        "open project":   OpenProject,
+        "close project":  CloseProject,
+        "next":           PreviousSlide,      // Swapped: next -> previous slide
+        "previous":       NextSlide,          // Swapped: previous -> next slide
+        "stop":           Stop,
     },
 }
 
@@ -49,7 +47,6 @@ func main() {
     fmt.Println("🎤 Voice Controller for PowerPoint - Go Version")
     fmt.Println("=================================================")
     fmt.Println("")
-
     var pptCtrl *powerpoint.Controller
     var err error
 
@@ -63,8 +60,8 @@ func main() {
     // Try to connect to existing PowerPoint instance
     pptCtrl, err = powerpoint.NewController()
     if err != nil {
-        fmt.Println("ℹ️  PowerPoint is not currently running")
-        fmt.Println("   Use 'open project' command to start it")
+        fmt.Println("ℹ️ PowerPoint is not currently running")
+        fmt.Println(" Use 'open project' command to start it")
     } else {
         fmt.Println("✅ Connected to existing PowerPoint instance")
         defer pptCtrl.Close()
@@ -117,26 +114,20 @@ func handleCommand(command string, pptCtrl **powerpoint.Controller) {
         case OpenProject:
             fmt.Println("🚀 Opening PowerPoint project...")
             handleOpenProject(pptCtrl)
-            
         case CloseProject:
             fmt.Println("🔒 Closing PowerPoint project...")
             handleCloseProject(pptCtrl)
-            
         case NextSlide:
-            fmt.Println("➡️  Going to next slide...")
             handleNextSlide(pptCtrl)
-            
         case PreviousSlide:
-            fmt.Println("⬅️  Going to previous slide...")
             handlePreviousSlide(pptCtrl)
-            
         case Stop:
             fmt.Println("🛑 Stopping program...")
             handleStop(pptCtrl)
         }
     } else {
         fmt.Printf("❌ Unknown command: '%s'\n", command)
-        fmt.Println("💡 Available commands: 'open project', 'close project', 'next slide', 'previous slide', 'stop'")
+        fmt.Println("💡 Available commands: 'open project', 'close project', 'next', 'previous', 'stop'")
     }
 }
 
@@ -148,66 +139,95 @@ func handleOpenProject(pptCtrl **powerpoint.Controller) {
         time.Sleep(2 * time.Second)
     }
 
-    // Try to open PowerPoint with file
-    fmt.Printf("📂 Opening file: %s\n", DefaultConfig.PowerPointFilePath)
-    
-    if err := powerpoint.OpenPowerPointWithFile(DefaultConfig.PowerPointFilePath); err != nil {
-        fmt.Printf("❌ Error opening PowerPoint: %v\n", err)
+    // Check if file exists
+    if _, err := os.Stat(DefaultConfig.PowerPointFilePath); os.IsNotExist(err) {
+        fmt.Printf("❌ PowerPoint file not found: %s\n", DefaultConfig.PowerPointFilePath)
         return
     }
 
-    fmt.Println("⏳ Waiting for PowerPoint to start...")
-    time.Sleep(5 * time.Second)
+    fmt.Printf("📂 Opening file: %s\n", DefaultConfig.PowerPointFilePath)
 
-    // Try to connect to PowerPoint
-    newPptCtrl, err := powerpoint.NewController()
+    // Open PowerPoint with file (with fallback)
+    newPptCtrl, err := powerpoint.OpenPowerPointWithFile(DefaultConfig.PowerPointFilePath)
     if err != nil {
-        fmt.Printf("⚠️  PowerPoint opened but could not connect: %v\n", err)
-        fmt.Println("💡 You can still use 'next slide' and 'previous slide' commands")
-    } else {
-        *pptCtrl = newPptCtrl
-        fmt.Println("✅ Successfully connected to PowerPoint!")
+        fmt.Printf("⚠️ Could not connect via COM after open: %v\n", err)
+        fmt.Println("💡 File should still be open; use 'next/previous' with keyboard fallback")
+        // Don't set pptCtrl to nil – fallback might have opened it
+        return
     }
+
+    *pptCtrl = newPptCtrl
+    fmt.Println("✅ Successfully connected to PowerPoint!")
 }
 
 func handleCloseProject(pptCtrl **powerpoint.Controller) {
+    filename := filepath.Base(DefaultConfig.PowerPointFilePath)
+    filename = strings.TrimSuffix(filename, filepath.Ext(filename)) // e.g., "pro"
+
     if *pptCtrl != nil {
         if err := (*pptCtrl).ClosePowerPoint(); err != nil {
-            fmt.Printf("❌ Error closing PowerPoint: %v\n", err)
+            fmt.Printf("❌ Error closing via COM: %v\n", err)
         } else {
-            fmt.Println("✅ PowerPoint closed successfully")
+            fmt.Println("✅ Closed via COM")
             *pptCtrl = nil
+            return
         }
+        *pptCtrl = nil
+    }
+    // Always try process close if COM failed or no connection
+    fmt.Printf("🔒 Attempting to close presentation '%s'...\n", filename)
+    if err := powerpoint.ClosePowerPointProcess(filename); err != nil {
+        fmt.Printf("❌ Process close failed: %v\n", err)
     } else {
-        if err := powerpoint.ClosePowerPointProcess(); err != nil {
-            fmt.Printf("❌ Error closing PowerPoint process: %v\n", err)
-        } else {
-            fmt.Println("✅ PowerPoint process closed")
-        }
+        fmt.Println("✅ Specific presentation closed")
     }
 }
 
 func handleNextSlide(pptCtrl **powerpoint.Controller) {
+    fmt.Println("➡️ Going to next slide...")
+
     if *pptCtrl != nil {
         if err := (*pptCtrl).NextSlide(); err != nil {
-            fmt.Printf("❌ Error going to next slide: %v\n", err)
+            fmt.Printf("⚠️ COM navigation failed: %v, falling back to keyboard\n", err)
+            if err := powerpoint.SendRightArrow(); err != nil {
+                fmt.Printf("❌ Keyboard fallback failed: %v\n", err)
+            } else {
+                fmt.Println("✅ Moved to next slide via keyboard")
+            }
         } else {
-            fmt.Println("✅ Moved to next slide")
+            fmt.Println("✅ Moved to next slide via COM")
         }
     } else {
-        fmt.Println("❌ PowerPoint not available. Use 'open project' first.")
+        fmt.Println("⚠️ No COM connection, using keyboard fallback...")
+        if err := powerpoint.SendRightArrow(); err != nil {
+            fmt.Printf("❌ Keyboard fallback failed: %v\n", err)
+        } else {
+            fmt.Println("✅ Moved to next slide via keyboard")
+        }
     }
 }
 
 func handlePreviousSlide(pptCtrl **powerpoint.Controller) {
+    fmt.Println("⬅️ Going to previous slide...")
+
     if *pptCtrl != nil {
         if err := (*pptCtrl).PreviousSlide(); err != nil {
-            fmt.Printf("❌ Error going to previous slide: %v\n", err)
+            fmt.Printf("⚠️ COM navigation failed: %v, falling back to keyboard\n", err)
+            if err := powerpoint.SendLeftArrow(); err != nil {
+                fmt.Printf("❌ Keyboard fallback failed: %v\n", err)
+            } else {
+                fmt.Println("✅ Moved to previous slide via keyboard")
+            }
         } else {
-            fmt.Println("✅ Moved to previous slide")
+            fmt.Println("✅ Moved to previous slide via COM")
         }
     } else {
-        fmt.Println("❌ PowerPoint not available. Use 'open project' first.")
+        fmt.Println("⚠️ No COM connection, using keyboard fallback...")
+        if err := powerpoint.SendLeftArrow(); err != nil {
+            fmt.Printf("❌ Keyboard fallback failed: %v\n", err)
+        } else {
+            fmt.Println("✅ Moved to previous slide via keyboard")
+        }
     }
 }
 
