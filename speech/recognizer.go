@@ -9,14 +9,14 @@ import (
 )
 
 type Recognizer struct {
-    Commands    chan string
+    Commands chan string
     isListening bool
-    mutex       sync.Mutex
+    mutex sync.Mutex
 }
 
 func NewRecognizer() (*Recognizer, error) {
     return &Recognizer{
-        Commands:    make(chan string, 10),
+        Commands: make(chan string, 10),
         isListening: false,
     }, nil
 }
@@ -25,29 +25,24 @@ func (r *Recognizer) StartListening() error {
     r.mutex.Lock()
     r.isListening = true
     r.mutex.Unlock()
-
     fmt.Println("🎤 Using Windows Speech Recognition (command mode)...")
-    fmt.Println("💡 Say: 'open project', 'close project', 'next slide', 'previous slide', or 'stop'")
-
+    fmt.Println("💡 Say: 'open project', 'close project', 'next', 'previous', or 'stop'")
     go func() {
         for r.isListening {
             psCommand := `
                 Add-Type -AssemblyName System.Speech;
                 $recognizer = New-Object System.Speech.Recognition.SpeechRecognitionEngine;
-
                 # Define allowed commands
                 $choices = New-Object System.Speech.Recognition.Choices;
                 $choices.Add("open project");
                 $choices.Add("close project");
-                $choices.Add("next slide");
-                $choices.Add("previous slide");
+                $choices.Add("next");
+                $choices.Add("previous");
                 $choices.Add("stop");
-
                 # Build grammar
                 $gb = New-Object System.Speech.Recognition.GrammarBuilder;
                 $gb.Append($choices);
                 $grammar = New-Object System.Speech.Recognition.Grammar($gb);
-
                 $recognizer.LoadGrammar($grammar);
                 $recognizer.SetInputToDefaultAudioDevice();
                 $result = $recognizer.Recognize();
@@ -56,11 +51,10 @@ func (r *Recognizer) StartListening() error {
             cmd := exec.Command("powershell", "-Command", psCommand)
             out, err := cmd.Output()
             if err != nil {
-                fmt.Printf("⚠️  Speech recognition error: %v\n", err)
+                fmt.Printf("⚠️ Speech recognition error: %v\n", err)
                 time.Sleep(2 * time.Second)
                 continue
             }
-
             recognized := strings.ToLower(strings.TrimSpace(string(out)))
             if recognized != "" {
                 fmt.Printf("🎯 Voice recognized: %s\n", recognized)
@@ -68,11 +62,9 @@ func (r *Recognizer) StartListening() error {
             } else {
                 fmt.Println("🕓 (no speech detected)")
             }
-
             time.Sleep(1 * time.Second)
         }
     }()
-
     return nil
 }
 
