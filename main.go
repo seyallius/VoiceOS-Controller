@@ -37,8 +37,8 @@ var DefaultConfig = Config{
         // English commands
         "open project":   OpenProject,
         "close project":  CloseProject,
-        "next":           PreviousSlide,      // Swapped: next -> previous slide
-        "previous":       NextSlide,          // Swapped: previous -> next slide
+        "next":           NextSlide,      // Swapped: next -> previous slide
+        "previous":       PreviousSlide,          // Swapped: previous -> next slide
         "stop":           Stop,
     },
 }
