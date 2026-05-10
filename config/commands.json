@@ -1,0 +1,54 @@
+{
+  "commands": {
+    "open notepad": {
+      "action": "launch_app",
+      "target": "notepad.exe"
+    },
+    "open calculator": {
+      "action": "launch_app",
+      "target": "calc.exe"
+    },
+    "open browser": {
+      "action": "launch_app",
+      "target": "chrome.exe"
+    },
+    "close notepad": {
+      "action": "close_app",
+      "target": "notepad"
+    },
+    "volume up": {
+      "action": "volume",
+      "value": "up"
+    },
+    "volume down": {
+      "action": "volume",
+      "value": "down"
+    },
+    "mute": {
+      "action": "volume",
+      "value": "mute"
+    },
+    "lock pc": {
+      "action": "system",
+      "value": "lock"
+    },
+    "shutdown": {
+      "action": "system",
+      "value": "shutdown"
+    },
+    "restart": {
+      "action": "system",
+      "value": "restart"
+    },
+    "screenshot": {
+      "action": "screenshot"
+    },
+    "switch window": {
+      "action": "switch_window"
+    },
+    "type hello": {
+      "action": "type",
+      "value": "hello world"
+    }
+  }
+}
